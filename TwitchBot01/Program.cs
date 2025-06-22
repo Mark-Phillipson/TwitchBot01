@@ -19,10 +19,11 @@ namespace TestConsole
             Bot bot = new Bot();
             Console.ReadLine();
         }
-    }    class Bot
+    }
+    class Bot
     {
         TwitchClient client;
-        
+
         public Bot()
         {
             // Load configuration from appsettings.json
@@ -34,15 +35,15 @@ namespace TestConsole
             string username = configuration["TwitchBot:Username"] ?? throw new InvalidOperationException("Username not found in configuration");
             string accessToken = configuration["TwitchBot:AccessToken"] ?? throw new InvalidOperationException("AccessToken not found in configuration");
             string channel = configuration["TwitchBot:Channel"] ?? throw new InvalidOperationException("Channel not found in configuration");
-            
+
             Console.WriteLine($"Connecting as: {username} to channel: {channel}");
-            
+
             ConnectionCredentials credentials = new ConnectionCredentials(username, accessToken);
-	    var clientOptions = new ClientOptions
-                {
-                    MessagesAllowedInPeriod = 750,
-                    ThrottlingPeriod = TimeSpan.FromSeconds(30)
-                };
+            var clientOptions = new ClientOptions
+            {
+                MessagesAllowedInPeriod = 750,
+                ThrottlingPeriod = TimeSpan.FromSeconds(30)
+            };
             WebSocketClient customClient = new WebSocketClient(clientOptions);
             client = new TwitchClient(customClient);
             client.Initialize(credentials, channel);
@@ -55,21 +56,23 @@ namespace TestConsole
             client.OnConnected += Client_OnConnected;
 
             client.Connect();
-        }        private void Client_OnLog(object? sender, OnLogArgs e)
+        }
+        private void Client_OnLog(object? sender, OnLogArgs e)
         {
             Console.WriteLine($"{e.DateTime.ToString()}: {e.BotUsername} - {e.Data}");
         }
-  
+
         private void Client_OnConnected(object? sender, OnConnectedArgs e)
         {
             Console.WriteLine($"Connected to {e.AutoJoinChannel}");
         }
-  
+
         private void Client_OnJoinedChannel(object? sender, OnJoinedChannelArgs e)
         {
             Console.WriteLine("Hey guys! I am a bot connected via TwitchLib!");
             client.SendMessage(e.Channel, "Hey guys! I am a bot connected via TwitchLib!");
-        }        private void Client_OnMessageReceived(object? sender, OnMessageReceivedArgs e)
+        }
+        private void Client_OnMessageReceived(object? sender, OnMessageReceivedArgs e)
         {
             // Play a sound notification for new chat messages
             try
@@ -87,20 +90,20 @@ namespace TestConsole
                 // If beep doesn't work, just show a visual indicator
                 Console.WriteLine("🔔 NEW MESSAGE!");
             }
-            
+
             // Log the message to console so you can see it
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {e.ChatMessage.Username}: {e.ChatMessage.Message}");
-            
+
             if (e.ChatMessage.Message.Contains("badword"))
                 client.TimeoutUser(e.ChatMessage.Channel, e.ChatMessage.Username, TimeSpan.FromMinutes(30), "Bad word! 30 minute timeout!");
         }
-        
+
         private void Client_OnWhisperReceived(object? sender, OnWhisperReceivedArgs e)
         {
             if (e.WhisperMessage.Username == "my_friend")
                 client.SendWhisper(e.WhisperMessage.Username, "Hey! Whispers are so cool!!");
         }
-        
+
         private void Client_OnNewSubscriber(object? sender, OnNewSubscriberArgs e)
         {
             if (e.Subscriber.SubscriptionPlan == SubscriptionPlan.Prime)
