@@ -244,6 +244,33 @@ private void Client_OnMessageReceived(object? sender, OnMessageReceivedArgs e)
 - [Twitch Developer Console](https://dev.twitch.tv/console)
 - [Twitch Token Generator](https://twitchtokengenerator.com/)
 
+## Browser Chat Relay (TwitchChatWeb)
+
+- **Purpose**: A Blazor/Razor Components web app that mirrors Twitch chat in a browser using SignalR.
+- **Location**: the relay app is in `TwitchChatWeb/` (hub: `TwitchChatWeb/Hubs/ChatHub.cs`; server mapping: `TwitchChatWeb/Program.cs`).
+- **How it works**: The console bot attempts to connect to `http://localhost:5194/chathub` at startup and calls the hub method `SendMessage` with the chat line (for example, `username: message`). When connected, the web app broadcasts messages to connected browser clients.
+
+### Running the web relay
+
+1. Start the web relay (recommended before the bot):
+
+```powershell
+dotnet run --project TwitchChatWeb/TwitchChatWeb.csproj
+```
+
+2. Start the bot:
+
+```powershell
+dotnet run --project TwitchBot01/TwitchBot01.csproj
+```
+
+- If the web relay is not running the bot will continue without the browser bridge and log the error. To change the relay URL/port, update the hub URL in `TwitchBot01/Program.cs`.
+
+### Notes
+
+- The bridge is currently one-way (bot → web). The bot forwards chat messages but does not process hub-to-bot invocations by default.
+- The bot uses `Console.Beep` on Windows for audible notifications and logs messages to the console.
+
 ## License
 
 This project is for educational purposes. Make sure to comply with Twitch's Terms of Service and API guidelines when using this bot.

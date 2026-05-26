@@ -1,7 +1,10 @@
 ﻿using System;
 using System.IO;
 using System.Media;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Drawing;
+using System.Windows.Forms;
 using Microsoft.Extensions.Configuration;
 using TwitchLib.Client;
 using TwitchLib.Client.Enums;
@@ -18,14 +21,20 @@ namespace TestConsole
     {
         static void Main(string[] args)
         {
-            Bot bot = new Bot();
+            using Bot bot = new Bot();
             Console.ReadLine();
         }
     }
-    class Bot
+    class Bot : IDisposable
     {
         TwitchClient client;
         private HubConnection? hubConnection;
+
+        // UI thread fields for tray icon
+        private NotifyIcon? _notifyIcon;
+        private Thread? _uiThread;
+        private SynchronizationContext? _uiContext;
+        private ManualResetEventSlim? _uiInitEvent;
 
         public Bot()
         {
@@ -58,6 +67,37 @@ namespace TestConsole
             client.OnWhisperReceived += Client_OnWhisperReceived;
             client.OnNewSubscriber += Client_OnNewSubscriber;
             client.OnConnected += Client_OnConnected;
+
+            // Initialize tray UI on Windows
+            if (OperatingSystem.IsWindows())
+            {
+                _uiInitEvent = new ManualResetEventSlim(false);
+                _uiThread = new Thread(() =>
+                {
+                    SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+                    _uiContext = SynchronizationContext.Current;
+                    _notifyIcon = new NotifyIcon
+                    {
+                        Icon = SystemIcons.Application,
+                        Visible = true,
+                        Text = "TwitchBot01"
+                    };
+                        // Add a small context menu so the icon can be right-clicked (Exit)
+                        var cms = new ContextMenuStrip();
+                        var exitItem = new ToolStripMenuItem("Exit");
+                        exitItem.Click += (s, ev) => Application.ExitThread();
+                        cms.Items.Add(exitItem);
+                        _notifyIcon.ContextMenuStrip = cms;
+                        Console.WriteLine("Tray UI initialized");
+                    _uiInitEvent.Set();
+                    Application.Run();
+                });
+                _uiThread.SetApartmentState(ApartmentState.STA);
+                _uiThread.IsBackground = true;
+                _uiThread.Start();
+                // Wait until the UI thread signals initialization (no short timeout)
+                _uiInitEvent.Wait();
+            }
 
             try
             {
@@ -96,7 +136,7 @@ namespace TestConsole
         }
         private void Client_OnMessageReceived(object? sender, OnMessageReceivedArgs e)
         {
-            // Play a sound notification for new chat messages
+            // Forward to web relay when connected
             if (hubConnection?.State == HubConnectionState.Connected)
             {
                 _ = hubConnection.SendAsync("SendMessage", $"{e.ChatMessage.Username}: {e.ChatMessage.Message}")
@@ -117,11 +157,50 @@ namespace TestConsole
                     Console.Beep(800, 200); // 800 Hz frequency for 200 milliseconds
                     Console.Beep(800, 200); // 800 Hz frequency for 200 milliseconds
                     Console.Beep(800, 200); // 800 Hz frequency for 200 milliseconds
+
+                    // Show a tray balloon notification (marshal to UI thread)
+                    string title = e.ChatMessage.Username;
+                    string message = e.ChatMessage.Message;
+                    if (_uiContext != null)
+                    {
+                        _uiContext.Post(_ =>
+                        {
+                            try
+                            {
+                                if (_notifyIcon != null)
+                                {
+                                    _notifyIcon.BalloonTipTitle = title;
+                                    _notifyIcon.BalloonTipText = message;
+                                    _notifyIcon.BalloonTipIcon = ToolTipIcon.Info;
+                                    _notifyIcon.ShowBalloonTip(3000);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Failed to show balloon tip: {ex.Message}");
+                            }
+                        }, null);
+                    }
+                    else
+                    {
+                        // Fallback attempt (may be suppressed on some systems)
+                        try
+                        {
+                            _notifyIcon?.BalloonTipTitle = title;
+                            _notifyIcon?.BalloonTipText = message;
+                            _notifyIcon?.BalloonTipIcon = ToolTipIcon.Info;
+                            _notifyIcon?.ShowBalloonTip(3000);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Fallback balloon failed: {ex.Message}");
+                        }
+                    }
                 }
             }
             catch
             {
-                // If beep doesn't work, just show a visual indicator
+                // If beep/notification doesn't work, just show a visual indicator
                 Console.WriteLine("🔔 NEW MESSAGE!");
             }
 
@@ -144,6 +223,47 @@ namespace TestConsole
                 client.SendMessage(e.Channel, $"Welcome {e.Subscriber.DisplayName} to the substers! You just earned 500 points! So kind of you to use your Twitch Prime on this channel!");
             else
                 client.SendMessage(e.Channel, $"Welcome {e.Subscriber.DisplayName} to the substers! You just earned 500 points!");
+        }
+
+        public void Dispose()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    _uiContext?.Post(_ =>
+                    {
+                        try
+                        {
+                            if (_notifyIcon != null)
+                            {
+                                _notifyIcon.Visible = false;
+                                _notifyIcon.Dispose();
+                                _notifyIcon = null;
+                            }
+                        }
+                        catch { }
+                        Application.ExitThread();
+                    }, null);
+
+                    _uiThread?.Join(1000);
+                }
+                catch { }
+                _uiInitEvent?.Dispose();
+                _uiInitEvent = null;
+            }
+
+            try
+            {
+                client?.Disconnect();
+            }
+            catch { }
+
+            try
+            {
+                hubConnection?.DisposeAsync().AsTask().Wait(500);
+            }
+            catch { }
         }
     }
 }

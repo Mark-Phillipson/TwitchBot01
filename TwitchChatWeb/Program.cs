@@ -2,6 +2,8 @@ using TwitchChatWeb.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration["ReloadStaticAssetsAtRuntime"] = "false";
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
