@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Media;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using TwitchLib.Client;
 using TwitchLib.Client.Enums;
@@ -9,6 +10,7 @@ using TwitchLib.Client.Extensions;
 using TwitchLib.Client.Models;
 using TwitchLib.Communication.Clients;
 using TwitchLib.Communication.Models;
+using Microsoft.AspNetCore.SignalR.Client;
 
 namespace TestConsole
 {
@@ -23,9 +25,11 @@ namespace TestConsole
     class Bot
     {
         TwitchClient client;
+        private HubConnection? hubConnection;
 
         public Bot()
         {
+
             // Load configuration from appsettings.json
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
@@ -55,8 +59,26 @@ namespace TestConsole
             client.OnNewSubscriber += Client_OnNewSubscriber;
             client.OnConnected += Client_OnConnected;
 
+            try
+            {
+                hubConnection = new HubConnectionBuilder()
+                    .WithUrl("http://localhost:5194/chathub")
+                    .WithAutomaticReconnect()
+                    .Build();
+
+                hubConnection.StartAsync().Wait();
+                Console.WriteLine("Connected to local chat relay at http://localhost:5194/chathub");
+            }
+            catch (Exception ex)
+            {
+                hubConnection = null;
+                Console.WriteLine($"Local chat relay unavailable: {ex.GetBaseException().Message}");
+                Console.WriteLine("Continuing without the web chat bridge. Start TwitchChatWeb if you want browser chat mirroring.");
+            }
+
             client.Connect();
         }
+
         private void Client_OnLog(object? sender, OnLogArgs e)
         {
             Console.WriteLine($"{e.DateTime.ToString()}: {e.BotUsername} - {e.Data}");
@@ -75,6 +97,18 @@ namespace TestConsole
         private void Client_OnMessageReceived(object? sender, OnMessageReceivedArgs e)
         {
             // Play a sound notification for new chat messages
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                _ = hubConnection.SendAsync("SendMessage", $"{e.ChatMessage.Username}: {e.ChatMessage.Message}")
+                    .ContinueWith(task =>
+                    {
+                        if (task.IsFaulted)
+                        {
+                            Console.WriteLine($"Failed to forward chat message to web relay: {task.Exception?.GetBaseException().Message}");
+                        }
+                    }, TaskScheduler.Default);
+            }
+
             try
             {
                 // Use Console.Beep for a simple sound notification
