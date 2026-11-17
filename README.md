@@ -13,7 +13,7 @@ A simple Twitch chat bot built with C# using the TwitchLib library. This bot can
 
 ## Prerequisites
 
-- .NET 9.0 SDK
+- .NET 11.0 SDK
 - Visual Studio or VS Code
 - A Twitch account
 - A registered Twitch application (for API access)

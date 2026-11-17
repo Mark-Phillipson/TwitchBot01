@@ -1,4 +1,4 @@
 @echo off
 REM Quick launcher for TwitchBot - optimized for voice commands
 title TwitchBot
-cmd.exe /c start "" /d "C:\Users\MPhil\source\repos\TwitchBot01\TwitchBot01\bin\Debug\net9.0" TwitchBot01.exe
+start "" /D "%~dp0TwitchBot01" dotnet run --project "%~dp0TwitchBot01\TwitchBot01.csproj"
