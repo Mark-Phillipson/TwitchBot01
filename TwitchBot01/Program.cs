@@ -28,6 +28,7 @@ namespace TestConsole
     class Bot : IDisposable
     {
         TwitchClient client;
+        private readonly string _botUsername;
         private HubConnection? hubConnection;
 
         // UI thread fields for tray icon
@@ -46,6 +47,7 @@ namespace TestConsole
                 .Build();
 
             string username = configuration["TwitchBot:Username"] ?? throw new InvalidOperationException("Username not found in configuration");
+            _botUsername = username;
             string accessToken = configuration["TwitchBot:AccessToken"] ?? throw new InvalidOperationException("AccessToken not found in configuration");
             string channel = configuration["TwitchBot:Channel"] ?? throw new InvalidOperationException("Channel not found in configuration");
 
@@ -147,6 +149,12 @@ namespace TestConsole
                             Console.WriteLine($"Failed to forward chat message to web relay: {task.Exception?.GetBaseException().Message}");
                         }
                     }, TaskScheduler.Default);
+            }
+
+            if (!ChatMessageNotificationPolicy.ShouldNotify(e.ChatMessage.Username, _botUsername))
+            {
+                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {e.ChatMessage.Username}: {e.ChatMessage.Message}");
+                return;
             }
 
             try

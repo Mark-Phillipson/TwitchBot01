@@ -271,6 +271,16 @@ dotnet run --project TwitchBot01/TwitchBot01.csproj
 - The bridge is currently one-way (bot → web). The bot forwards chat messages but does not process hub-to-bot invocations by default.
 - The bot uses `Console.Beep` on Windows for audible notifications and logs messages to the console.
 
+## Testing chat notifications
+
+Run the automated username-filter checks with:
+
+```powershell
+dotnet test TwitchBot01.Tests/TwitchBot01.Tests.csproj
+```
+
+For a live sound check, start the bot using `start-twitchbot.bat`, then have another Twitch account send a message in the configured channel. A message from that other account should beep and show a tray notification; a message from `MarcusVoiceCoder` should still appear in the console and relay, but should not beep or show a tray notification. Live testing requires a valid bot token, Windows audio enabled, and (for tray popups) notifications enabled.
+
 ## License
 
 This project is for educational purposes. Make sure to comply with Twitch's Terms of Service and API guidelines when using this bot.
